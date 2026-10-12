@@ -1,0 +1,33 @@
+# Copy to api_contract.yaml in your Flutter project root. Every key is optional.
+
+# File path (relative to the project) or URL. --spec overrides it.
+spec: https://api.example.com/docs-json
+
+# Where the models live, and what to skip (generated files are always skipped).
+paths: [lib]
+exclude:
+  - lib/legacy/**
+
+# Stripped from model and schema names before matching (UserModel <-> UserDto <-> User).
+suffixes: [Model, Dto, DTO, Response, Entity, Data, Json]
+
+# Explicit model -> schema pairs. null = local-only model, never checked.
+models:
+  WalletModel: WalletResponse
+  DraftPost: null
+
+# Model -> success response of an endpoint; "#data" unwraps an envelope property.
+endpoints:
+  ProfileModel: GET /me#data
+
+# Accepted exceptions: a whole model, or one key.
+ignore:
+  - AnalyticsEvent
+  - UserModel.legacyField
+
+# Headers for downloading the spec. ${ENV_VAR} is expanded.
+headers:
+  Authorization: Bearer ${DOCS_TOKEN}
+
+# Known drift, shrink-only (see --update-baseline).
+baseline: api_contract_baseline.json

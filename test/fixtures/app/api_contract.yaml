@@ -1,0 +1,8 @@
+spec: ../specs/openapi3.yaml
+models:
+  WalletModel: WalletDetails
+  CacheEntry: null
+endpoints:
+  ProfileModel: GET /me#data
+ignore:
+  - ProfileModel.avatar

@@ -1,0 +1,98 @@
+openapi: 3.0.3
+info:
+  title: Fixture API
+  version: '1.0'
+paths:
+  /me:
+    get:
+      responses:
+        '200':
+          description: The signed-in profile, wrapped in an envelope.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Profile'
+  /wallet:
+    get:
+      responses:
+        '200':
+          description: Wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDetails'
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, user_name, status, created_at, age, score]
+      properties:
+        id: {type: integer, format: int64}
+        user_name: {type: string}
+        display_name: {type: string}
+        email: {type: string, nullable: true}
+        created_at: {type: string, format: date-time}
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        age: {type: string}
+        address:
+          $ref: '#/components/schemas/Address'
+        tags:
+          type: array
+          items: {type: string}
+        score: {type: number}
+        locale: {type: string}
+    UserStatus:
+      type: string
+      enum: [active, banned, pending]
+    Address:
+      type: object
+      required: [city, geo]
+      properties:
+        city: {type: string}
+        geo:
+          type: object
+          required: [lat, lng]
+          properties:
+            lat: {type: number}
+            lng: {type: number}
+    WalletDetails:
+      type: object
+      required: [balance, currency]
+      properties:
+        balance: {type: number}
+        currency: {type: string}
+        frozen: {type: boolean}
+    Profile:
+      type: object
+      required: [nickname]
+      properties:
+        nickname: {type: string}
+        bio: {type: string, nullable: true}
+    Product:
+      type: object
+      required: [product_id, title, price, kind, legacy_code]
+      properties:
+        product_id: {type: integer}
+        title: {type: string}
+        price: {type: number}
+        stock_count: {type: integer}
+        kind:
+          type: string
+          enum: [physical, digital, service]
+        sku: {type: string}
+        legacy_code: {type: string}
+    Session:
+      type: object
+      required: [token, expires_at]
+      properties:
+        token: {type: string}
+        expires_at: {type: string, format: date-time}
+        refresh_token: {type: string}
+        device: {type: string}
+        role:
+          type: string
+          enum: [admin, member]
