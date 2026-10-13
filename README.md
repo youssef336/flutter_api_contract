@@ -1,3 +1,5 @@
+[العربية](README.ar.md)
+
 <h1 align="center">Flutter API Contract</h1>
 
 <p align="center">
@@ -5,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://pub.dev/packages/flutter_api_contract"><img src="https://img.shields.io/pub/v/flutter_api_contract?style=for-the-badge&logo=dart&label=pub.dev" alt="pub.dev"/></a>
   <img src="https://img.shields.io/badge/Dart-CLI-0175C2?style=for-the-badge&logo=dart&logoColor=white" alt="Dart CLI">
   <img src="https://img.shields.io/badge/Flutter-models-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Flutter">
   <img src="https://img.shields.io/badge/OpenAPI-3.0%20%7C%203.1-6BA539?style=for-the-badge&logo=openapiinitiative&logoColor=white" alt="OpenAPI 3">
@@ -27,101 +30,98 @@
 > annotations; the exit code is 1 on errors so it can gate CI, and a shrink-only baseline lets
 > you adopt it on a project with existing drift.
 
-<div dir="rtl">
+The backend renamed a field, made it optional, or added a new enum value... and your app still
+remembers the old shape. The result: `type 'Null' is not a subtype of type 'String'` in
+production. This tool compares the models in your Dart code with the backend's OpenAPI / Swagger
+spec, and tells you about the difference **before** it reaches the user.
 
-الـ backend غيّر اسم field، أو خلّاه optional، أو زوّد قيمة جديدة في enum... والـ app بتاعك
-لسه فاكر الشكل القديم. النتيجة: `type 'Null' is not a subtype of type 'String'` في
-production. الأداة دي بتقارن الـ models اللي في كودك Dart بالـ OpenAPI / Swagger بتاع الـ
-backend، وبتقولك على الفرق **قبل** ما يوصل للمستخدم.
+## ✨ What it does
 
-## ✨ بتعمل إيه
-
-- 📄 **بتقرا الـ spec**: OpenAPI 3.0 و 3.1 و Swagger 2.0، JSON أو YAML، من فايل أو من لينك
-  (`--spec https://api.example.com/docs-json`). بتفهم `$ref` و `allOf` و `nullable` و
-  `type: [string, 'null']` و `x-nullable` و `anyOf` فيه `null`.
-- 🔍 **بتقرا الـ models من الكود نفسه** (بـ `package:analyzer`، من غير ما تعمل build):
-  - **fromJson مكتوب بإيدك**: `json['key']`، و `as String` / `as String?`، و `??`، و
-    `json['x'] == null ? null : ...`، و `json['a']['b']`، و `final data = json['data']`،
-    و `DateTime.parse`، و `X.fromJson(...)`، و `Status.values.byName(...)` و
+- 📄 **Reads the spec**: OpenAPI 3.0 and 3.1 and Swagger 2.0, JSON or YAML, from a file or a URL
+  (`--spec https://api.example.com/docs-json`). It understands `$ref`, `allOf`, `nullable`,
+  `type: [string, 'null']`, `x-nullable` and `anyOf` containing `null`.
+- 🔍 **Reads the models from the code itself** (with `package:analyzer`, without running a build):
+  - **Hand-written fromJson**: `json['key']`, `as String` / `as String?`, `??`,
+    `json['x'] == null ? null : ...`, `json['a']['b']`, `final data = json['data']`,
+    `DateTime.parse`, `X.fromJson(...)`, `Status.values.byName(...)` and
     `firstWhere(..., orElse: ...)`.
-  - **json_serializable**: `@JsonKey(name:, defaultValue:, includeFromJson:, unknownEnumValue:)`،
-    و `fieldRename` على الكلاس، و `field_rename` العام في `build.yaml`، والـ default بتاع الـ
-    constructor.
-  - **freezed**: params الـ factory، و `@Default`، و `@JsonKey`، و `@JsonSerializable` على الـ
-    factory، والـ unions.
-  - **enums**: `@JsonValue`، و `@JsonEnum(fieldRename:, valueField:)`، والـ `case 'x':` في
-    parser مكتوب بإيدك.
-- 🔗 **بتربط كل model بالـ schema بتاعته**: بالاسم (`UserModel` / `UserDto` / `User` ↔
-  `components.schemas.User` بعد ما تشيل الـ suffixes)، أو بـ mapping صريح في
-  `api_contract.yaml`، أو بالـ endpoint (`ProfileModel: GET /me#data`).
-- 🚨 **بتطلّع الفروق دي**:
+  - **json_serializable**: `@JsonKey(name:, defaultValue:, includeFromJson:, unknownEnumValue:)`,
+    `fieldRename` on the class, the global `field_rename` in `build.yaml`, and the constructor
+    default.
+  - **freezed**: the factory params, `@Default`, `@JsonKey`, `@JsonSerializable` on the factory,
+    and unions.
+  - **enums**: `@JsonValue`, `@JsonEnum(fieldRename:, valueField:)`, and `case 'x':` in a
+    hand-written parser.
+- 🔗 **Pairs each model with its schema**: by name (`UserModel` / `UserDto` / `User` ↔
+  `components.schemas.User` after stripping the suffixes), by an explicit mapping in
+  `api_contract.yaml`, or by endpoint (`ProfileModel: GET /me#data`).
+- 🚨 **Reports these differences**:
 
-  | الكود | الخطورة | يعني |
+  | Code | Severity | Meaning |
   |---|---|---|
-  | `nullable-mismatch` | 🔴 error | الـ schema بتقول الـ field ممكن ييجي `null` أو مايجيش، والكود بيقراه non-nullable من غير default → **crash** |
-  | `missing-in-schema` | 🔴 / 🟡 | الكود بيقرا key مش موجود في الـ schema (غالبًا اتغيّر اسمه)، وبيقترح أقرب اسم: «did you mean `user_name`?» |
-  | `type-mismatch` | 🔴 / 🟡 | `int` قصاد `string`، `List` قصاد `object`، `int` قصاد `number` (كسور)، `as double` قصاد رقم صحيح |
-  | `enum-unhandled` | 🔴 / 🟡 | الـ schema فيها قيمة الـ enum بتاعك مايعرفهاش. error لو مفيش fallback، warning لو فيه |
-  | `enum-extra` | 🔵 info | الـ enum بتاعك فيه قيم الـ schema عمرها ما بتبعتها |
-  | `required-ignored` | 🔵 info | field مطلوب في الـ schema والكود مش بيقراه خالص |
-  | `unmatched-model` | 🟡 warning | model ملوش schema، وبيقولك أقرب schema لاسمه |
-  | `unknown-schema` | 🔴 error | الـ config بيشاور على schema أو endpoint مش موجود |
+  | `nullable-mismatch` | 🔴 error | The schema says the field may be `null` or absent, and the code reads it as non-nullable with no default → **crash** |
+  | `missing-in-schema` | 🔴 / 🟡 | The code reads a key that is not in the schema (probably renamed), and suggests the closest name: "did you mean `user_name`?" |
+  | `type-mismatch` | 🔴 / 🟡 | `int` vs `string`, `List` vs `object`, `int` vs `number` (fractions), `as double` vs an integer |
+  | `enum-unhandled` | 🔴 / 🟡 | The schema has an enum value your enum does not know. Error if there is no fallback, warning if there is |
+  | `enum-extra` | 🔵 info | Your enum has values the schema never sends |
+  | `required-ignored` | 🔵 info | A field is required in the schema and the code never reads it |
+  | `unmatched-model` | 🟡 warning | A model has no schema; it tells you the schema closest to its name |
+  | `unknown-schema` | 🔴 error | The config points to a schema or endpoint that does not exist |
 
-- 📤 **4 أشكال للنتيجة**: `text` (للـ terminal)، و `markdown` (تحطه في PR)، و `json`، و `github`
-  (annotations جنب السطر في الـ PR).
-- 🚦 **بتوقف الـ CI**: exit code `1` لو فيه error (أو warning بـ `--fail-on warning`).
-- 📉 **baseline بيقل بس**: لو مشروعك فيه فروق قديمة، اقبلها مرة واحدة وكمّل. أي فرق
-  **جديد** هيظهر، والقديم لما يتصلح بيتشال من الـ baseline ومش بيرجع تاني.
+- 📤 **4 output formats**: `text` (for the terminal), `markdown` (to put in a PR), `json`, and
+  `github` (annotations next to the line in the PR).
+- 🚦 **Fails the CI**: exit code `1` if there is an error (or a warning with `--fail-on warning`).
+- 📉 **Shrink-only baseline**: if your project has existing drift, accept it once and move on.
+  Any **new** difference shows up, and an old one, once fixed, is removed from the baseline and
+  never comes back.
 
-## 📦 التسطيب
+## 📦 Installation
 
-محتاج Dart 3.11 أو أحدث (أو Flutter فيه Dart ده).
+Requires Dart 3.11 or newer (or a Flutter version that ships it).
 
 ```bash
-dart pub global activate --source git https://github.com/youssef336/flutter_api_contract.git
+dart pub global activate flutter_api_contract
 ```
 
-أو جوه المشروع كـ dev dependency:
+Or inside the project as a dev dependency:
 
 ```yaml
 dev_dependencies:
-  flutter_api_contract:
-    git: https://github.com/youssef336/flutter_api_contract.git
+  flutter_api_contract: ^0.1.0
 ```
 
 ```bash
 dart run flutter_api_contract:api_contract --spec openapi.json
 ```
 
-## 🚀 الاستخدام
+## 🚀 Usage
 
 ```bash
-# من root مشروع الـ Flutter
+# from the root of the Flutter project
 api_contract --spec https://api.example.com/docs-json
 api_contract --spec docs/openapi.yaml --format markdown > drift.md
 api_contract --spec "$SPEC_URL" -H "Authorization: Bearer $DOCS_TOKEN" --format github
 ```
 
-| الـ option | بيعمل إيه |
+| Option | What it does |
 |---|---|
-| `-s, --spec` | فايل أو لينك الـ spec (بيغطي على `spec:` في الـ config) |
-| `-p, --project` | root المشروع (الافتراضي `.`) |
-| `-c, --config` | فايل الـ config (الافتراضي `api_contract.yaml`) |
+| `-s, --spec` | The spec file or URL (overrides `spec:` in the config) |
+| `-p, --project` | The project root (default `.`) |
+| `-c, --config` | The config file (default `api_contract.yaml`) |
 | `-f, --format` | `text` · `markdown` · `json` · `github` |
-| `--fail-on` | `error` (الافتراضي) · `warning` · `never` |
-| `-b, --baseline` | فايل JSON فيه الفروق المقبولة |
-| `--update-baseline` | يعمل الـ baseline لو مش موجود، أو يصغّره بس لو موجود |
-| `-H, --header` | header لتحميل الـ spec (تقدر تكررها) |
-| `--[no-]color` | ألوان ANSI |
+| `--fail-on` | `error` (default) · `warning` · `never` |
+| `-b, --baseline` | A JSON file with the accepted differences |
+| `--update-baseline` | Creates the baseline if it does not exist, or only shrinks it if it does |
+| `-H, --header` | A header for downloading the spec (repeatable) |
+| `--[no-]color` | ANSI colors |
 
-الـ exit codes: `0` مفيش مشاكل · `1` فيه فروق عند مستوى `--fail-on` · `2` غلط في الأمر أو الـ spec.
+Exit codes: `0` no problems · `1` differences at the `--fail-on` level · `2` an error in the
+command or the spec.
 
-## 🧪 شكل النتيجة
+## 🧪 What the output looks like
 
-ده تشغيل حقيقي على الـ [Swagger Petstore v3](https://petstore3.swagger.io/api/v3/openapi.json)
-مع app صغير فيه 3 فروق متعمّدة (موجود في `test/fixtures/petstore_app`):
-
-</div>
+This is a real run against the [Swagger Petstore v3](https://petstore3.swagger.io/api/v3/openapi.json)
+with a small app containing 3 intentional differences (in `test/fixtures/petstore_app`):
 
 ```text
 $ api_contract --spec https://petstore3.swagger.io/api/v3/openapi.json
@@ -147,13 +147,9 @@ PetModel → Pet  lib/models/pet_model.dart
 3 errors · 0 warnings · 1 info
 ```
 
-<div dir="rtl">
+## ⚙️ Config (optional)
 
-## ⚙️ الـ config (اختياري)
-
-حط `api_contract.yaml` في root المشروع (فيه نسخة كاملة في `api_contract.example.yaml`):
-
-</div>
+Put an `api_contract.yaml` in the project root (a complete copy is in `api_contract.example.yaml`):
 
 ```yaml
 spec: https://api.example.com/docs-json
@@ -161,79 +157,76 @@ paths: [lib]
 exclude: ['lib/legacy/**']
 suffixes: [Model, Dto, DTO, Response, Entity, Data, Json]
 models:
-  WalletModel: WalletResponse   # اسم الـ schema بالظبط
-  DraftPost: null               # model محلي، متفحصهوش
+  WalletModel: WalletResponse   # the exact schema name
+  DraftPost: null               # a local model, do not check it
 endpoints:
-  ProfileModel: GET /me#data    # الـ response بتاع الـ endpoint، و #data بتفك الـ envelope
+  ProfileModel: GET /me#data    # the endpoint's response; #data unwraps the envelope
 ignore:
-  - AnalyticsEvent              # model كامل
-  - UserModel.legacyField       # key واحد
+  - AnalyticsEvent              # a whole model
+  - UserModel.legacyField       # a single key
 headers:
   Authorization: Bearer ${DOCS_TOKEN}
 baseline: api_contract_baseline.json
 ```
 
-<div dir="rtl">
-
-## 📉 الـ baseline
+## 📉 Baseline
 
 ```bash
-api_contract -b api_contract_baseline.json --update-baseline   # أول مرة: يقبل الموجود
-api_contract -b api_contract_baseline.json                     # في الـ CI: الجديد بس هو اللي بيفشّل
+api_contract -b api_contract_baseline.json --update-baseline   # first time: accepts what exists
+api_contract -b api_contract_baseline.json                     # in CI: only new drift fails
 ```
 
-الـ baseline بيتحفظ كـ fingerprints (`code|Model|key`) من غير أرقام سطور، فمش بيبوظ لما
-تعدّل الفايل. `--update-baseline` على فايل موجود **بيشيل** اللي اتصلح بس، وعمره ما بيزوّد
-فرق جديد. لو عايز تقبل فرق جديد بجد، زوّده بإيدك في الفايل عشان يبان في الـ review.
+The baseline is stored as fingerprints (`code|Model|key`) without line numbers, so it does not
+break when you edit the file. `--update-baseline` on an existing file only **removes** what was
+fixed, and never adds a new difference. If you really want to accept a new difference, add it to
+the file by hand so it shows up in the review.
 
-## 🤖 في GitHub Actions
-
-</div>
+## 🤖 In GitHub Actions
 
 ```yaml
 - uses: dart-lang/setup-dart@v1
-- run: dart pub global activate --source git https://github.com/youssef336/flutter_api_contract.git
+- run: dart pub global activate flutter_api_contract
 - run: api_contract --spec "${{ vars.API_SPEC_URL }}" --format github -b api_contract_baseline.json
 ```
 
-<div dir="rtl">
+## ❓ FAQ
 
-## ❓ أسئلة
+**Why doesn't it run a build or build_runner?**
+Because it only reads the source (syntactic). It understands `@JsonSerializable` and `@freezed`
+from the annotations themselves, so it does not need the `.g.dart` files (and ignores them
+anyway).
 
-**ليه مش بيعمل build ولا بيشغّل build_runner؟**
-لأنه بيقرا الـ source بس (syntactic). بيفهم `@JsonSerializable` و `@freezed` من الـ
-annotations نفسها، فمش محتاج الـ `.g.dart` (وبيتجاهلها أصلًا).
+**My models are named differently from the schemas.**
+Add the suffix to `suffixes:`, map them by hand in `models:`, or by endpoint in `endpoints:`.
 
-**الـ models بتاعتي اسمها مختلف عن الـ schemas.**
-زوّد الـ suffix في `suffixes:`، أو اربطها بإيدك في `models:`، أو بالـ endpoint في `endpoints:`.
+**The API returns `{ "data": {...} }`.**
+`endpoints: { ProfileModel: GET /me#data }`; the `#` walks into the properties (`#data.user`
+works too).
 
-**الـ API بيرجع `{ "data": {...} }`.**
-`endpoints: { ProfileModel: GET /me#data }`، والـ `#` بتمشي جوه الـ properties (`#data.user` كمان شغالة).
+**There is a key I know is not in the schema, on purpose.**
+`ignore: [UserModel.localFlag]`, or put it in the baseline.
 
-**فيه key عارف إنه مش في الـ schema وده مقصود.**
-`ignore: [UserModel.localFlag]`، أو حطه في الـ baseline.
+**Why is `int` vs `number` a warning and not an error?**
+`json_serializable` generates `(x as num).toInt()`, so it will not crash, but you lose the
+fractions. However, `as double` in a hand-written fromJson on an integer really does crash, which
+is why that one is reported.
 
-**ليه `int` قصاد `number` warning مش error؟**
-`json_serializable` بيعمل `(x as num).toInt()`، فمش هيعمل crash، بس هتخسر الكسور.
-لكن `as double` في fromJson مكتوب بإيدك على رقم صحيح بيعمل crash فعلًا، عشان كده بيطلع.
+**The spec is protected by a token.**
+`-H "Authorization: Bearer $TOKEN"` or `headers:` in the config (`${ENV}` is substituted from
+the environment).
 
-**الـ spec محمي بـ token.**
-`-H "Authorization: Bearer $TOKEN"` أو `headers:` في الـ config (`${ENV}` بتتبدّل من الـ environment).
+## ⚖️ Limitations
 
-## ⚖️ الحدود
-
-- التحليل syntactic: مفيش type resolution. الـ fields اللي جاية بالوراثة من superclass في
-  `json_serializable` مش بتتشاف، والـ helpers اللي برّه الكلاس (`_parseDate(json['d'])`)
-  بتتعامل إنها آمنة ومن غير type.
-- الـ fromJson المكتوب بإيدك لازم يقرا من الـ map parameter بـ string literal
-  (`json['key']`). الـ keys اللي جاية من متغيرات أو loops مش بتتشاف.
-- الـ `oneOf` / `anyOf` بين أكتر من شكل (مش `null`) بيتعدّى من غير type check.
-- `freezed` unions: الـ keys بتاعة كل الـ factories بتتجمع في model واحد، والـ
-  `runtimeType` discriminator مش بيتفحص.
-- الـ converters (`@JsonKey(fromJson:)` و `@XConverter()`) بتلغي فحص الـ type للـ field ده.
-- بيفحص الـ responses بس (اللي الـ app بيقراه)، مش الـ request bodies.
-
-</div>
+- The analysis is syntactic: there is no type resolution. Fields inherited from a superclass in
+  `json_serializable` are not seen, and helpers outside the class (`_parseDate(json['d'])`) are
+  treated as safe and untyped.
+- A hand-written fromJson must read from the map parameter with a string literal
+  (`json['key']`). Keys coming from variables or loops are not seen.
+- `oneOf` / `anyOf` across several (non-`null`) shapes is skipped without a type check.
+- `freezed` unions: the keys of all the factories are merged into one model, and the
+  `runtimeType` discriminator is not checked.
+- Converters (`@JsonKey(fromJson:)` and `@XConverter()`) disable the type check for that field.
+- It only checks responses (what the app reads), not request bodies.
 
 ## 🛠 Tech stack
 
