@@ -1,0 +1,2 @@
+# Test fixtures are sample apps with their own imports; not part of the package.
+test/fixtures/
