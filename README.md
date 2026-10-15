@@ -1,5 +1,7 @@
 [العربية](README.ar.md)
 
+<p align="center"><img src="https://raw.githubusercontent.com/youssef336/flutter_api_contract/main/screenshots/banner.png" alt="flutter_api_contract banner" width="100%"></p>
+
 <h1 align="center">Flutter API Contract</h1>
 
 <p align="center">
