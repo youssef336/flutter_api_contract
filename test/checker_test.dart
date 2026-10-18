@@ -203,7 +203,7 @@ class User {
       expect(extra.message, contains('"owner"'));
     });
 
-    test('enum-unhandled is a warning with a fallback', () {
+    test('enum-unhandled is info with a fallback', () {
       final findings = check('''
 enum Role { admin, member }
 @JsonSerializable()
@@ -215,7 +215,7 @@ class User {
 }''', userSpec);
       expect(
         find(findings, Codes.enumUnhandled, 'role')!.severity,
-        Severity.warning,
+        Severity.info,
       );
     });
 

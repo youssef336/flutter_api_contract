@@ -77,6 +77,8 @@ class ApiSpec {
     required this.label,
     required this.schemas,
     required this.responses,
+    this.responseSchemas = const {},
+    this.requestSchemas = const {},
   });
 
   /// Builds an [ApiSpec] from a decoded JSON/YAML document.
@@ -100,6 +102,9 @@ class ApiSpec {
     final sharedResponses = isV2
         ? _map(doc['responses'])
         : _map(_map(doc['components'])['responses']);
+    final sharedBodies = _map(_map(doc['components'])['requestBodies']);
+    final responseRefs = _RefCollector(rawSchemas, sharedResponses);
+    final requestRefs = _RefCollector(rawSchemas, sharedBodies);
     for (final pathEntry in _map(doc['paths']).entries) {
       for (final opEntry in _map(pathEntry.value).entries) {
         final method = opEntry.key.toUpperCase();
@@ -109,12 +114,24 @@ class ApiSpec {
         if (schema != null) {
           responses['$method ${pathEntry.key}'] = parseSchema(schema);
         }
+        responseRefs.walk(op['responses']);
+        requestRefs.walk(op['requestBody']);
+        if (isV2) {
+          final params = op['parameters'];
+          if (params is List) {
+            for (final param in params) {
+              if (_map(param)['in'] == 'body') requestRefs.walk(param);
+            }
+          }
+        }
       }
     }
     return ApiSpec(
       label: isV2 ? 'Swagger $swagger' : 'OpenAPI $openapi',
       schemas: schemas,
       responses: responses,
+      responseSchemas: responseRefs.names,
+      requestSchemas: requestRefs.names,
     );
   }
 
@@ -126,6 +143,17 @@ class ApiSpec {
 
   /// Success-response body schema per operation, keyed `GET /pet/{petId}`.
   final Map<String, SchemaNode> responses;
+
+  /// Schemas reachable (through `$ref`s) from any operation response.
+  final Set<String> responseSchemas;
+
+  /// Schemas reachable (through `$ref`s) from any request body.
+  final Set<String> requestSchemas;
+
+  /// A schema only ever sent *to* the API (e.g. `CreateUserDto`): never the
+  /// shape a `fromJson` model decodes.
+  bool isRequestOnly(String name) =>
+      requestSchemas.contains(name) && !responseSchemas.contains(name);
 
   static const _httpMethods = {
     'GET',
@@ -243,6 +271,12 @@ SchemaNode parseSchema(Object? raw) {
     if (names.length == 1) type = _jsonType(names.single);
   }
 
+  // NestJS (and other generators) emit `string | null` and unknown TS types
+  // as a bare `{type: object}`: it says nothing about the wire value.
+  if (type == JsonType.object && _isBareObject(m)) {
+    return SchemaNode(nullable: nullable);
+  }
+
   final allOfRaw = m['allOf'];
   final allOf = allOfRaw is List
       ? allOfRaw.map(parseSchema).toList()
@@ -309,6 +343,48 @@ Object? _successSchema(
     if (schema != null) return schema;
   }
   return null;
+}
+
+bool _isBareObject(Map<String, Object?> m) => !const [
+  'properties',
+  'additionalProperties',
+  'patternProperties',
+  'allOf',
+  'oneOf',
+  'anyOf',
+  'enum',
+  'items',
+].any(m.containsKey);
+
+/// Collects the names of the component schemas reachable from raw JSON,
+/// following `$ref`s into schemas and shared responses/request bodies.
+class _RefCollector {
+  _RefCollector(this.schemas, this.shared);
+  final Map<String, Object?> schemas;
+  final Map<String, Object?> shared;
+  final names = <String>{};
+  final _sharedSeen = <String>{};
+
+  void walk(Object? node) {
+    if (node is Map) {
+      final ref = node[r'$ref'];
+      if (ref is String) {
+        final name = refName(ref);
+        if (ref.contains('/schemas/') || ref.contains('/definitions/')) {
+          if (names.add(name)) walk(schemas[name]);
+        } else if (_sharedSeen.add(name)) {
+          walk(shared[name]);
+        }
+      }
+      for (final v in node.values) {
+        walk(v);
+      }
+    } else if (node is List) {
+      for (final v in node) {
+        walk(v);
+      }
+    }
+  }
 }
 
 JsonType _jsonType(String name) => switch (name) {

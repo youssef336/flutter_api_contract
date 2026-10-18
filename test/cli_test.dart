@@ -22,7 +22,7 @@ void main() {
     expect(out, contains('did you mean "user_name"?'));
     expect(out, contains('No drift: WalletModel → WalletDetails'));
     expect(out, contains('Skipped by config: CacheEntry'));
-    expect(out, contains('8 errors · 7 warnings · 2 info'));
+    expect(out, contains('8 errors · 6 warnings · 3 info'));
   });
 
   test('every finding code shows up on the fixture app', () async {

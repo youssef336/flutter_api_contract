@@ -12,7 +12,7 @@ import 'report/report.dart';
 import 'spec/loader.dart';
 
 /// Package version, printed by `--version`.
-const packageVersion = '0.1.0';
+const packageVersion = '0.1.1';
 
 /// Exit codes.
 abstract final class ExitCodes {

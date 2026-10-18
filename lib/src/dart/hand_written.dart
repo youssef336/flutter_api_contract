@@ -78,13 +78,18 @@ class HandWrittenAnalyzer {
           if (existing == null) {
             merged[id] = read;
           } else {
+            // A probe (`json['x'] is Map`, `!= null`) has no type and must
+            // not cancel the converter/type-guard flag of a typed read.
+            existing.customConverter = existing.type == null
+                ? read.customConverter
+                : read.type == null
+                ? existing.customConverter
+                : existing.customConverter && read.customConverter;
             existing.nullSafe = existing.nullSafe && read.nullSafe;
             existing.type ??= read.type;
             existing.hasDefault = existing.hasDefault || read.hasDefault;
             existing.enumName ??= read.enumName;
             existing.enumFallback = existing.enumFallback || read.enumFallback;
-            existing.customConverter =
-                existing.customConverter && read.customConverter;
           }
         }
       }
@@ -121,12 +126,14 @@ class HandWrittenAnalyzer {
     var depth = path.length - 1;
     var nullAware = expr.question != null;
     while (depth >= 1) {
+      final guard = _guard(expr, body, path[depth - 1]);
       reads.add(
         FieldRead(
           key: path.first,
           path: path.sublist(1, depth),
           type: const DartType('Map'),
-          nullSafe: nullAware,
+          nullSafe: nullAware || guard.nullGuard,
+          customConverter: guard.typeGuard,
           line: line,
         ),
       );
@@ -309,7 +316,9 @@ class HandWrittenAnalyzer {
       if (identical(a, body)) break;
     }
 
-    if (_guarded(read, body)) safe = true;
+    final guard = _guard(read, body);
+    if (guard.nullGuard) safe = true;
+    if (guard.typeGuard) info.converter = true;
     info.safe = safe ?? true;
     info.type = info.probe ? null : (sinkType ?? castType);
     final enumName = info.enumName;
@@ -392,11 +401,20 @@ class HandWrittenAnalyzer {
       operator?.lexeme == '?.' ||
       const {'toString', 'hashCode', 'runtimeType'}.contains(name);
 
-  /// Is [read] inside a branch guarded by a null/containsKey check on the
-  /// same key?
-  bool _guarded(Expression read, AstNode body) {
-    final key = _firstKey(read);
-    if (key == null) return false;
+  /// Is [read] inside a branch guarded by a check on [key] (the read's own
+  /// key by default)? `nullGuard`: a null/containsKey/type check on the key
+  /// (`x != null ? ... : null`, `x is Map && ...`); `typeGuard`: the check is
+  /// a type test (`x is Map ? ... : x as String?`), so the cast in the branch
+  /// says nothing about the wire type.
+  ({bool nullGuard, bool typeGuard}) _guard(
+    Expression read,
+    AstNode body, [
+    String? key,
+  ]) {
+    key ??= _firstKey(read);
+    var nullGuard = false;
+    var typeGuard = false;
+    if (key == null) return (nullGuard: false, typeGuard: false);
     AstNode child = read;
     for (var a = read.parent; a != null; a = a.parent) {
       Expression? condition;
@@ -406,12 +424,21 @@ class HandWrittenAnalyzer {
         condition = a.expression;
       } else if (a is IfElement && !identical(a.expression, child)) {
         condition = a.expression;
+      } else if (a is BinaryExpression &&
+          const {'&&', '||'}.contains(a.operator.lexeme) &&
+          identical(a.rightOperand, child)) {
+        condition = a.leftOperand;
       }
-      if (condition != null && _mentionsKey(condition, key)) return true;
+      if (condition != null && _mentionsKey(condition, key)) {
+        nullGuard = true;
+        final tests = _TypeTestFinder(key);
+        condition.accept(tests);
+        typeGuard = typeGuard || tests.found;
+      }
       if (identical(a, body)) break;
       child = a;
     }
-    return false;
+    return (nullGuard: nullGuard, typeGuard: typeGuard);
   }
 
   String? _firstKey(Expression read) {
@@ -522,6 +549,21 @@ class _ReadCollector extends RecursiveAstVisitor<void> {
     return parent is IndexExpression &&
         identical(parent.target, current) &&
         parent.index is SimpleStringLiteral;
+  }
+}
+
+/// Finds `<expr mentioning key> is T` / `is! T` in a condition.
+class _TypeTestFinder extends RecursiveAstVisitor<void> {
+  _TypeTestFinder(this.key);
+  final String key;
+  var found = false;
+
+  @override
+  void visitIsExpression(IsExpression node) {
+    final finder = _KeyFinder(key);
+    node.expression.accept(finder);
+    if (finder.found) found = true;
+    super.visitIsExpression(node);
   }
 }
 

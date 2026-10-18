@@ -153,6 +153,7 @@ class DartEnum {
     required this.line,
     required this.values,
     this.safeParse = false,
+    this.caseInsensitive = false,
   });
 
   final String name;
@@ -164,6 +165,10 @@ class DartEnum {
 
   /// Its own parser falls back on unknown input (`orElse`, `??`, `default:`).
   final bool safeParse;
+
+  /// Its own parser upper-/lower-cases the input before comparing, so wire
+  /// values match [values] regardless of case.
+  final bool caseInsensitive;
 }
 
 /// Everything extracted from a Dart project.

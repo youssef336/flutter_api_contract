@@ -70,7 +70,10 @@ class ContractChecker {
   }
 
   String? _schemaSuggestion(String modelName) {
-    final hit = closest(modelName, spec.schemas.keys);
+    final hit = closest(
+      modelName,
+      spec.schemas.keys.where((n) => !spec.isRequestOnly(n)),
+    );
     return hit == null
         ? null
         : 'closest schema is "$hit" — map it in api_contract.yaml '
@@ -100,6 +103,19 @@ class ContractChecker {
       file: model.file,
       line: line ?? model.line,
     );
+
+    if (m.note != null) {
+      findings.add(
+        finding(
+          Severity.info,
+          Codes.ambiguousMatch,
+          'Uncertain pairing: ${m.note}.',
+          suggestion:
+              'pin the right schema in api_contract.yaml '
+              '(models: {${model.name}: <Schema>}) or map an endpoint',
+        ),
+      );
+    }
 
     if (root.properties.isEmpty) {
       // Free-form object, primitive or oneOf: nothing to compare key-wise.
@@ -140,7 +156,11 @@ class ContractChecker {
         final hint = closest(segment, parent.properties.keys);
         findings.add(
           finding(
-            read.nullSafe ? Severity.warning : Severity.error,
+            m.lowOverlap
+                ? Severity.info
+                : read.nullSafe
+                ? Severity.warning
+                : Severity.error,
             Codes.missingInSchema,
             read.nullSafe
                 ? '"$key" is read by the app but $parentName has no '
@@ -235,7 +255,12 @@ class ContractChecker {
   ) {
     final s = spec.resolve(node);
     if (type.isDynamic || s.isUnion) return null;
-    if (s.type == JsonType.any && s.ref == null) return null;
+    // `any` (incl. a bare `{type: object}`): unknown, never a mismatch. Only
+    // an unresolvable `$ref` falls through.
+    if (s.type == JsonType.any &&
+        (s.ref == null || spec.schemas.containsKey(s.ref))) {
+      return null;
+    }
     final json = s.type;
     const err = Severity.error;
 
@@ -338,10 +363,18 @@ class ContractChecker {
       return const [];
     }
 
-    final dartSet = dartEnum.values.map((v) => v.toString()).toSet();
-    final schemaSet = schemaValues.map((v) => v.toString()).toSet();
-    final unhandled = schemaSet.difference(dartSet).toList()..sort();
-    final extra = dartSet.difference(schemaSet).toList()..sort();
+    String norm(Object? v) =>
+        dartEnum.caseInsensitive ? v.toString().toLowerCase() : v.toString();
+    final dartSet = dartEnum.values.map(norm).toSet();
+    final schemaSet = schemaValues.map(norm).toSet();
+    final unhandled = {
+      for (final v in schemaValues)
+        if (!dartSet.contains(norm(v))) v.toString(),
+    }.toList()..sort();
+    final extra = {
+      for (final v in dartEnum.values)
+        if (!schemaSet.contains(norm(v))) v.toString(),
+    }.toList()..sort();
     final key = read.displayKey;
     final findings = <Finding>[];
     final fallback = read.enumFallback || dartEnum.safeParse;
@@ -350,7 +383,7 @@ class ContractChecker {
     if (unhandled.isNotEmpty) {
       findings.add(
         Finding(
-          severity: fallback ? Severity.warning : Severity.error,
+          severity: fallback ? Severity.info : Severity.error,
           code: Codes.enumUnhandled,
           model: model.name,
           schema: schemaName,

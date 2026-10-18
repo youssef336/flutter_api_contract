@@ -381,14 +381,20 @@ DartEnum _extractEnum(EnumDeclaration decl, String file, LineInfo lines) {
 
   final switchLiterals = <String>[];
   var safeParse = false;
+  var caseInsensitive = false;
   for (final m in decl.body.members) {
     final collector = _CaseLiteralCollector();
     m.accept(collector);
     switchLiterals.addAll(collector.literals);
     final src = m.toSource();
     if (m is MethodDeclaration || m is ConstructorDeclaration) {
-      if (RegExp(r'orElse|\?\?|default|_ =>|OrNull|tryByName').hasMatch(src)) {
+      if (RegExp(r'orElse|\?\?|default|_ =>|OrNull|tryByName').hasMatch(src) ||
+          _endsInConstant(m, name)) {
         safeParse = true;
+      }
+      if (_isParser(m, name) &&
+          RegExp(r'toUpperCase\(\)|toLowerCase\(\)').hasMatch(src)) {
+        caseInsensitive = true;
       }
     }
   }
@@ -448,7 +454,44 @@ DartEnum _extractEnum(EnumDeclaration decl, String file, LineInfo lines) {
     line: lines.getLocation(decl.namePart.offset).lineNumber,
     values: values,
     safeParse: safeParse,
+    caseInsensitive: caseInsensitive,
   );
+}
+
+/// A static method or factory that produces the enum [enumName].
+bool _isParser(ClassMember m, String enumName) => switch (m) {
+  ConstructorDeclaration() => m.factoryKeyword != null,
+  MethodDeclaration() =>
+    m.isStatic && (m.returnType?.toSource().startsWith(enumName) ?? false),
+  _ => false,
+};
+
+/// A parser whose every path ends in a constant of [enumName] instead of
+/// throwing: `raw == 'A' ? E.a : E.b`, or a block ending in `return E.b;`.
+bool _endsInConstant(ClassMember m, String enumName) {
+  if (!_isParser(m, enumName)) return false;
+  final body = switch (m) {
+    ConstructorDeclaration() => m.body,
+    MethodDeclaration() => m.body,
+    _ => null,
+  };
+  bool isConstant(Expression? e) {
+    final x = e?.unParenthesized;
+    if (x is ConditionalExpression) return isConstant(x.elseExpression);
+    return (x is PrefixedIdentifier &&
+            x.prefix.name == enumName &&
+            x.identifier.name != 'values') ||
+        (x is PropertyAccess &&
+            x.target?.toSource() == enumName &&
+            !x.propertyName.name.startsWith('values'));
+  }
+
+  if (body is ExpressionFunctionBody) return isConstant(body.expression);
+  if (body is BlockFunctionBody) {
+    final last = body.block.statements.lastOrNull;
+    return last is ReturnStatement && isConstant(last.expression);
+  }
+  return false;
 }
 
 class _CaseLiteralCollector extends RecursiveAstVisitor<void> {

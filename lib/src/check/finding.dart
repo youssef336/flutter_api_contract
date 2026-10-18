@@ -24,6 +24,10 @@ abstract final class Codes {
   /// No schema could be matched to the model.
   static const unmatchedModel = 'unmatched-model';
 
+  /// The schema the name points at fits the model poorly: the model was
+  /// re-paired by shape, or its missing keys are reported as info only.
+  static const ambiguousMatch = 'ambiguous-match';
+
   /// `api_contract.yaml` points at a schema or endpoint that does not exist.
   static const unknownSchema = 'unknown-schema';
 }
