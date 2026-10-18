@@ -66,10 +66,11 @@ backend، وبتقولك على الفرق **قبل** ما يوصل للمستخ
   | `nullable-mismatch` | 🔴 error | الـ schema بتقول الـ field ممكن ييجي `null` أو مايجيش، والكود بيقراه non-nullable من غير default → **crash** |
   | `missing-in-schema` | 🔴 / 🟡 | الكود بيقرا key مش موجود في الـ schema (غالبًا اتغيّر اسمه)، وبيقترح أقرب اسم: «did you mean `user_name`?» |
   | `type-mismatch` | 🔴 / 🟡 | `int` قصاد `string`، `List` قصاد `object`، `int` قصاد `number` (كسور)، `as double` قصاد رقم صحيح |
-  | `enum-unhandled` | 🔴 / 🟡 | الـ schema فيها قيمة الـ enum بتاعك مايعرفهاش. error لو مفيش fallback، warning لو فيه |
+  | `enum-unhandled` | 🔴 / 🟡 | الـ schema فيها قيمة الـ enum بتاعك مايعرفهاش. error لو مفيش fallback، info لو فيه |
   | `enum-extra` | 🔵 info | الـ enum بتاعك فيه قيم الـ schema عمرها ما بتبعتها |
   | `required-ignored` | 🔵 info | field مطلوب في الـ schema والكود مش بيقراه خالص |
   | `unmatched-model` | 🟡 warning | model ملوش schema، وبيقولك أقرب schema لاسمه |
+  | `ambiguous-match` | 🔵 info | الـ schema اللي الاسم بيشاور عليها مش مناسبة: الـ model اتربط بـ schema تانية فيها مفاتيحه، أو المفاتيح الناقصة نزلت لـ info |
   | `unknown-schema` | 🔴 error | الـ config بيشاور على schema أو endpoint مش موجود |
 
 - 📤 **4 أشكال للنتيجة**: `text` (للـ terminal)، و `markdown` (تحطه في PR)، و `json`، و `github`
@@ -90,7 +91,7 @@ dart pub global activate flutter_api_contract
 
 ```yaml
 dev_dependencies:
-  flutter_api_contract: ^0.1.0
+  flutter_api_contract: ^0.1.1
 ```
 
 ```bash

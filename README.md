@@ -56,7 +56,9 @@ spec, and tells you about the difference **before** it reaches the user.
     hand-written parser.
 - 🔗 **Pairs each model with its schema**: by name (`UserModel` / `UserDto` / `User` ↔
   `components.schemas.User` after stripping the suffixes), by an explicit mapping in
-  `api_contract.yaml`, or by endpoint (`ProfileModel: GET /me#data`).
+  `api_contract.yaml`, or by endpoint (`ProfileModel: GET /me#data`). Schemas used only as
+  request bodies (`CreateUserDto`) are never paired with a model, and when the name-matched
+  schema has under half of the keys a model reads, a schema holding (nearly) all of them wins.
 - 🚨 **Reports these differences**:
 
   | Code | Severity | Meaning |
@@ -64,10 +66,11 @@ spec, and tells you about the difference **before** it reaches the user.
   | `nullable-mismatch` | 🔴 error | The schema says the field may be `null` or absent, and the code reads it as non-nullable with no default → **crash** |
   | `missing-in-schema` | 🔴 / 🟡 | The code reads a key that is not in the schema (probably renamed), and suggests the closest name: "did you mean `user_name`?" |
   | `type-mismatch` | 🔴 / 🟡 | `int` vs `string`, `List` vs `object`, `int` vs `number` (fractions), `as double` vs an integer |
-  | `enum-unhandled` | 🔴 / 🟡 | The schema has an enum value your enum does not know. Error if there is no fallback, warning if there is |
+  | `enum-unhandled` | 🔴 / 🟡 | The schema has an enum value your enum does not know. Error if there is no fallback, info if there is (`unknownEnumValue`, `orElse:`, `default:`, or a parser ending in a default constant) |
   | `enum-extra` | 🔵 info | Your enum has values the schema never sends |
   | `required-ignored` | 🔵 info | A field is required in the schema and the code never reads it |
   | `unmatched-model` | 🟡 warning | A model has no schema; it tells you the schema closest to its name |
+  | `ambiguous-match` | 🔵 info | The schema the name points at fits poorly: the model was re-paired by shape, or its missing keys are downgraded to info |
   | `unknown-schema` | 🔴 error | The config points to a schema or endpoint that does not exist |
 
 - 📤 **4 output formats**: `text` (for the terminal), `markdown` (to put in a PR), `json`, and
@@ -89,7 +92,7 @@ Or inside the project as a dev dependency:
 
 ```yaml
 dev_dependencies:
-  flutter_api_contract: ^0.1.0
+  flutter_api_contract: ^0.1.1
 ```
 
 ```bash
@@ -213,6 +216,11 @@ works too).
 fractions. However, `as double` in a hand-written fromJson on an integer really does crash, which
 is why that one is reported.
 
+**My NestJS spec has lots of `{"type": "object"}` fields.**
+`@nestjs/swagger` emits `string | null` and other unresolvable TypeScript types as a bare
+`{"type": "object"}` (no `properties`, `additionalProperties` or `$ref`). Such a schema says
+nothing about the wire value, so it is treated as "any" and never causes a `type-mismatch`.
+
 **The spec is protected by a token.**
 `-H "Authorization: Bearer $TOKEN"` or `headers:` in the config (`${ENV}` is substituted from
 the environment).
@@ -229,6 +237,8 @@ the environment).
   `runtimeType` discriminator is not checked.
 - Converters (`@JsonKey(fromJson:)` and `@XConverter()`) disable the type check for that field.
 - It only checks responses (what the app reads), not request bodies.
+- A read inside a branch guarded by a check on the same key (`json['x'] is Map ? ... : ...`,
+  `json['x'] != null && ...`) is treated as safe, and a type test turns off the type check.
 
 ## 🛠 Tech stack
 

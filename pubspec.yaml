@@ -2,7 +2,7 @@ name: flutter_api_contract
 description: >-
   Catch drift between your Dart/Flutter models and the backend's OpenAPI or
   Swagger schema before it crashes in production.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/youssef336/flutter_api_contract
 issue_tracker: https://github.com/youssef336/flutter_api_contract/issues
 topics: [openapi, swagger, json, lint, cli]
